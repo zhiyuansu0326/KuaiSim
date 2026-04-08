@@ -9,14 +9,14 @@ mkdir -p output/Kuairand_${KR_FLAG}/env/log
 output_path=output/Kuairand_${KR_FLAG}/
 
 # data source path
-data_path=dataset/Kuairand_${KR_FLAG}/
+data_path=../dataset/kuairand/kuairand-${KR_FLAG}/data/
 
 MODEL='KRMBUserResponse'
 # MODEL='KRMBUserResponseWithBias'
 
-for LR in 0.0001 0.00001
+for LR in 0.0001 
 do
-    for REG in 0
+    for REG in 0.01
     do
         for N_LAYER in 2
         do

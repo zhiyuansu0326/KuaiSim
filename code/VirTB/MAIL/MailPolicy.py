@@ -23,7 +23,7 @@ class MailPolicy(nn.Module):
 
         # self.dim_userleave_state = 88
         # self.dim_userleave_action = 101
-        self.dim_user_state = 118 + 23+1 
+        self.dim_user_state = 118 + 23 + 1 
         self.dim_user_action = 11
 
         self.dim_engine_state = 118

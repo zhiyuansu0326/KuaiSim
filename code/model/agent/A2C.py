@@ -290,10 +290,10 @@ class A2C(BaseRLAgent):
 
 
     def load(self):
-        self.critic.load_state_dict(torch.load(self.save_path + "_critic", map_location=self.device))
-        self.critic_optimizer.load_state_dict(torch.load(self.save_path + "_critic_optimizer", map_location=self.device))
+        self.critic.load_state_dict(torch.load(self.save_path + "_critic", map_location=self.device, weights_only=False))
+        self.critic_optimizer.load_state_dict(torch.load(self.save_path + "_critic_optimizer", map_location=self.device, weights_only=False))
         self.critic_target = copy.deepcopy(self.critic)
 
-        self.actor.load_state_dict(torch.load(self.save_path + "_actor", map_location=self.device))
-        self.actor_optimizer.load_state_dict(torch.load(self.save_path + "_actor_optimizer", map_location=self.device))
+        self.actor.load_state_dict(torch.load(self.save_path + "_actor", map_location=self.device, weights_only=False))
+        self.actor_optimizer.load_state_dict(torch.load(self.save_path + "_actor_optimizer", map_location=self.device, weights_only=False))
         self.actor_target = copy.deepcopy(self.actor)

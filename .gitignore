@@ -1,7 +1,10 @@
 .DS_Store
-.csv
-.checkpoint
-.log
+*.csv
+*.checkpoint
+*.log
+*.pyc
+__pycache__/
+.ipynb_checkpoints/
+output/
 code/output/
 code/dataset/
-.pyc

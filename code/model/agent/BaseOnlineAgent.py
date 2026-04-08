@@ -6,7 +6,7 @@ import torch.nn.functional as F
 from tqdm import tqdm
 
 import utils
-from model.agent.reward_func import *
+from model.reward import *
 
 class BaseOnlineAgent():
     @staticmethod
@@ -362,8 +362,8 @@ class BaseOnlineAgent():
 
 
     def load(self):
-        self.actor.load_state_dict(torch.load(self.save_path + "_actor", map_location=self.device))
-        self.actor_optimizer.load_state_dict(torch.load(self.save_path + "_actor_optimizer", map_location=self.device))
+        self.actor.load_state_dict(torch.load(self.save_path + "_actor", map_location=self.device, weights_only=False))
+        self.actor_optimizer.load_state_dict(torch.load(self.save_path + "_actor_optimizer", map_location=self.device, weights_only=False))
         self.actor_target = copy.deepcopy(self.actor)
         
         

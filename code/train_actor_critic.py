@@ -5,14 +5,14 @@ from torch.utils.data import DataLoader
 import argparse
 import numpy as np
 import os
-
-from model.agent import *
-from model.policy import *
-from model.critic import *
-from model.buffer import *
-from env import *
+import importlib
 
 import utils
+
+
+def load_class(package_name, class_name):
+    module = importlib.import_module(f"{package_name}.{class_name}")
+    return getattr(module, class_name)
 
 
 if __name__ == '__main__':
@@ -27,11 +27,11 @@ if __name__ == '__main__':
     
     initial_args, _ = init_parser.parse_known_args()
     print(initial_args)
-    envClass = eval('{0}.{0}'.format(initial_args.env_class))
-    policyClass = eval('{0}.{0}'.format(initial_args.policy_class))
-    criticClass = eval('{0}.{0}'.format(initial_args.critic_class))
-    agentClass = eval('{0}.{0}'.format(initial_args.agent_class))
-    bufferClass = eval('{0}.{0}'.format(initial_args.buffer_class))
+    envClass = load_class("env", initial_args.env_class)
+    policyClass = load_class("model.policy", initial_args.policy_class)
+    criticClass = load_class("model.critic", initial_args.critic_class)
+    agentClass = load_class("model.agent", initial_args.agent_class)
+    bufferClass = load_class("model.buffer", initial_args.buffer_class)
     
     # experimental control args
     parser = argparse.ArgumentParser()

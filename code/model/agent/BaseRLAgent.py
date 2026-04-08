@@ -328,6 +328,6 @@ class BaseRLAgent():
     
     def load(self):
         for model, opt, prefix in self.registered_models:
-            model.load_state_dict(torch.load(self.save_path + prefix, map_location = self.device))
-            opt.load_state_dict(torch.load(self.save_path + prefix + "_optimizer", map_location = self.device))
+            model.load_state_dict(torch.load(self.save_path + prefix, map_location = self.device, weights_only=False))
+            opt.load_state_dict(torch.load(self.save_path + prefix + "_optimizer", map_location = self.device, weights_only=False))
     

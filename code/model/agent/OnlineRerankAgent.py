@@ -6,7 +6,7 @@ import torch.nn.functional as F
 from tqdm import tqdm
 
 import utils
-from model.agent.reward_func import *
+from model.reward import *
 from model.agent.BaseOnlineAgent import BaseOnlineAgent
 
 class OnlineRerankAgent(BaseOnlineAgent):
