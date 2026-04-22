@@ -101,7 +101,7 @@ class KREnvironment_SlateRec(KREnvironment_WholeSession_GPU):
         super().reset(params)
 
         # batch-wise monitor
-        self.env_history = {'coverage': [], 'ILD': []}
+        self.env_history = {'coverage': [], 'ILD': [], 'EILD': []}
         
         return deepcopy(self.current_observation)
     
@@ -146,6 +146,7 @@ class KREnvironment_SlateRec(KREnvironment_WholeSession_GPU):
                 n_leave = done_mask.sum()
                 self.env_history['coverage'].append(response_dict['coverage'])
                 self.env_history['ILD'].append(response_dict['ILD'])
+                self.env_history['EILD'].append(response_dict.get('EILD', response_dict['ILD']))
 
                 # when users left, new users come into the running batch
                 if done_mask.sum() == len(done_mask):

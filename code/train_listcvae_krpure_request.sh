@@ -17,6 +17,7 @@ TEMPER=5
 EP_BS=128
 R_TARGET=3
 RHO=0.1
+INTRA_SLATE_METRIC=EILD
 
 # policy arguments
 POLICY_CLASS='ListCVAE'
@@ -62,6 +63,7 @@ do
                     --max_step_per_episode ${MAX_STEP}\
                     --episode_batch_size ${EP_BS}\
                     --item_correlation ${RHO}\
+                    --intra_slate_metric ${INTRA_SLATE_METRIC}\
                     --policy_class ${POLICY_CLASS}\
                     --loss ${LOSS}\
                     --cvae_beta ${BETA}\
@@ -106,4 +108,3 @@ do
         done
     done
 done
-

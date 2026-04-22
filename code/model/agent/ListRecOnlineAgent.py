@@ -243,6 +243,7 @@ class ListRecOnlineAgent(BaseRLAgent):
             test_report['reward_variance'] = torch.var(R).item()
             test_report['coverage'] = response_dict['coverage']
             test_report['ILD'] = response_dict['ILD']
+            test_report['EILD'] = response_dict.get('EILD', response_dict['ILD'])
             for j,resp in enumerate(self.env.response_types):
                 test_report[f'{resp}_rate'] = response_dict['immediate_response'][:,:,j].mean().item()
         train_report = {k: np.mean(v[-self.check_episode:]) for k,v in self.training_history.items()}

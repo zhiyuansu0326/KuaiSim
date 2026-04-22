@@ -213,7 +213,7 @@ class BaseOnlineAgent():
             self.eval_history['max_reward'].append(R.max().item())
             self.eval_history['reward_variance'].append(torch.var(R).item())
             self.eval_history['coverage'].append(user_feedback['coverage'])
-            self.eval_history['intra_slate_diversity'].append(user_feedback['ILD'])
+            self.eval_history['intra_slate_diversity'].append(user_feedback.get('EILD', user_feedback['ILD']))
             for i,resp in enumerate(self.env.response_types):
                 self.eval_history[f'{resp}_rate'].append(user_feedback['immediate_response'][:,:,i].mean().item())
 #             mean_response = torch.mean(user_feedback, dim = 0)
@@ -346,7 +346,7 @@ class BaseOnlineAgent():
             test_report['max_reward'] = R.max().item()
             test_report['reward_variance'] = torch.var(R).item()
             test_report['coverage'] = user_feedback['coverage']
-            test_report['intra_slate_diversity'] = user_feedback['ILD']
+            test_report['intra_slate_diversity'] = user_feedback.get('EILD', user_feedback['ILD'])
             for j,resp in enumerate(self.env.response_types):
                 test_report[f'{resp}_rate'] = user_feedback['immediate_response'][:,:,j].mean().item()
         train_report = {k: np.mean(v[-self.check_episode:]) for k,v in self.training_history.items()}

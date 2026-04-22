@@ -16,6 +16,7 @@ MAX_STEP=5
 TEMPER=5
 EP_BS=128
 RHO=0.1
+INTRA_SLATE_METRIC=EILD
 
 # policy arguments
 POLICY_CLASS='PRM'
@@ -65,6 +66,7 @@ do
                         --max_step_per_episode ${MAX_STEP}\
                         --episode_batch_size ${EP_BS}\
                         --item_correlation ${RHO}\
+                        --intra_slate_metric ${INTRA_SLATE_METRIC}\
                         --policy_class ${POLICY_CLASS}\
                         --initial_list_size ${INIT_LIST_SIZE}\
                         --stage1_n_neg ${INIT_N_NEG}\

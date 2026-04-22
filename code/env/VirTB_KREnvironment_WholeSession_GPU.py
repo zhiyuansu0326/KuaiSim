@@ -38,6 +38,7 @@ class VirTB_KREnvironment_WholeSession_GPU(BaseRLEnvironment):
         - slate_size
         - episode_batch_size
         - item_correlation
+        - intra_slate_metric
         - from BaseRLEnvironment
             - max_step_per_episode
             - initial_temper
@@ -51,6 +52,9 @@ class VirTB_KREnvironment_WholeSession_GPU(BaseRLEnvironment):
                             help='episode sample batch size')
         parser.add_argument('--item_correlation', type=float, default=0, 
                             help='magnitude of item correlation')
+        parser.add_argument('--intra_slate_metric', type=str, default='ILD',
+                            choices=['ILD', 'EILD', 'ild', 'eild'],
+                            help='intra-slate diversity metric used for correlation penalty')
         parser.add_argument('--single_response', action='store_true', 
                             help='only include the first feedback as reward signal')
         return parser
@@ -84,6 +88,7 @@ class VirTB_KREnvironment_WholeSession_GPU(BaseRLEnvironment):
         self.slate_size = args.slate_size
         self.episode_batch_size = args.episode_batch_size
         self.rho = args.item_correlation
+        self.intra_slate_metric = args.intra_slate_metric.upper()
         self.single_response = args.single_response
         
         infile = open(args.uirm_log_path, 'r')
@@ -209,7 +214,7 @@ class VirTB_KREnvironment_WholeSession_GPU(BaseRLEnvironment):
 
         # batch-wise monitor
         self.env_history = {'step': [0.], 'leave': [], 'temper': [],
-                            'coverage': [], 'ILD': []}
+                            'coverage': [], 'ILD': [], 'EILD': []}
         
         return deepcopy(self.current_observation)
         
@@ -256,6 +261,7 @@ class VirTB_KREnvironment_WholeSession_GPU(BaseRLEnvironment):
             self.env_history['temper'].append(torch.mean(self.current_temper).item())
             self.env_history['coverage'].append(response_dict['coverage'])
             self.env_history['ILD'].append(response_dict['ILD'])
+            self.env_history['EILD'].append(response_dict.get('EILD', response_dict['ILD']))
 
             # when users left, new users come into the running batch
             if n_leave > 0:
@@ -295,7 +301,8 @@ class VirTB_KREnvironment_WholeSession_GPU(BaseRLEnvironment):
         - response_dict: {'immediate_response': (B, slate_size, n_feedback), 
                           'user_state': (B, gt_state_dim), 
                           'coverage': scalar,
-                          'ILD': scalar}
+                          'ILD': scalar,
+                          'EILD': scalar}
         '''
         # actions (exposures), (B, slate_size), indices of self.candidate_iid
         action = step_dict['action']
@@ -336,11 +343,13 @@ class VirTB_KREnvironment_WholeSession_GPU(BaseRLEnvironment):
 
         # (B, slate_size, n_feedback)
         response = torch.bernoulli(point_scores).detach()
-        
+
+        diversity_score = 1 - torch.mean(corr_factor).item()
         return {'immediate_response': response, 
                 'user_state': out_dict['state'],
                 'coverage': coverage, 
-                'ILD': 1 - torch.mean(corr_factor).item()}
+                'ILD': diversity_score,
+                'EILD': diversity_score}
 
     def get_ground_truth_user_state(self, profile, history):
         batch_data = {}
@@ -360,8 +369,19 @@ class VirTB_KREnvironment_WholeSession_GPU(BaseRLEnvironment):
         B, L, d = action_item_encoding.shape
         # pairwise similarity in a slate (B, L, L)
         pair_similarity = torch.mean(action_item_encoding.view(B,L,1,d) * action_item_encoding.view(B,1,L,d), dim = -1)
-        # similarity to slate average, (B, L)
-        point_similarity = torch.mean(pair_similarity, dim = -1)
+        if self.intra_slate_metric == 'EILD':
+            # position-aware pair discount: farther positions contribute less
+            position_idx = torch.arange(L, device = action_item_encoding.device, dtype = pair_similarity.dtype)
+            pair_distance = torch.abs(position_idx.view(L,1) - position_idx.view(1,L))
+            pair_discount = torch.where(pair_distance > 0,
+                                        1.0 / torch.log2(pair_distance + 1.0),
+                                        torch.zeros_like(pair_distance))
+            pair_discount = pair_discount.view(1, L, L)
+            normalizer = pair_discount.sum(dim = -1).clamp_min(1e-12)
+            point_similarity = torch.sum(pair_similarity * pair_discount, dim = -1) / normalizer
+        else:
+            # ILD baseline: similarity to slate average, (B, L)
+            point_similarity = torch.mean(pair_similarity, dim = -1)
         return point_similarity
     
     def get_leave_signal(self, user_state, action, response_dict):

@@ -1,3 +1,7 @@
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+cd "${REPO_ROOT}"
+
 KR_FLAG='Pure'
 
 # output path
@@ -20,7 +24,7 @@ do
     do
         for N_LAYER in 2
         do
-            python train_multibehavior.py\
+            python "${SCRIPT_DIR}/train_multibehavior.py"\
                 --epoch 10\
                 --seed 619607\
                 --lr ${LR}\

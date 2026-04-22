@@ -15,6 +15,7 @@ SLATE_SIZE=6
 MAX_STEP=5
 EP_BS=64
 RHO=0.2
+INTRA_SLATE_METRIC=EILD
 
 # policy arguments
 POLICY_CLASS='PointwiseRanker'
@@ -63,6 +64,7 @@ do
                     --slate_size ${SLATE_SIZE}\
                     --episode_batch_size ${EP_BS}\
                     --item_correlation ${RHO}\
+                    --intra_slate_metric ${INTRA_SLATE_METRIC}\
                     --policy_action_hidden 256 64\
                     --ptranker_pos_offset ${POS_OFFSET}\
                     --ptranker_neg_offset ${NEG_OFFSET}\

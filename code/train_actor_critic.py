@@ -53,6 +53,7 @@ if __name__ == '__main__':
     else:
         device = "cpu"
     args.device = device
+    print(device)
     utils.set_random_seed(args.seed)
     
     # Environment

@@ -20,6 +20,7 @@ FEEDBACK_INF_RETURN=0.1
 SLATE_SIZE=6
 EP_BS=32
 RHO=0.2
+INTRA_SLATE_METRIC=EILD
 
 # policy arguments
 POLICY_CLASS='ActionTransformer'
@@ -71,6 +72,7 @@ do
                         --slate_size ${SLATE_SIZE}\
                         --episode_batch_size ${EP_BS}\
                         --item_correlation ${RHO}\
+                        --intra_slate_metric ${INTRA_SLATE_METRIC}\
                         --max_step_per_episode ${MAX_STEP}\
                         --policy_class ${POLICY_CLASS}\
                         --policy_user_latent_dim 16\

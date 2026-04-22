@@ -142,6 +142,67 @@ bash train_{model name}_krpure_crosssession.sh
 |   RLUR    |     **3.481**     |     **0.607**     |
 
 
+## 2.4 Benchmark Evaluation Commands
+
+Run from repository root:
+
+```bash
+cd code
+```
+
+### 2.4.1 Unified benchmark aggregation (paper-aligned + extra rates)
+
+This entry aligns core metrics with the paper and also reports all available `*_rate` metrics
+such as `is_click_rate`, `is_hate_rate`, etc.
+
+```bash
+python evaluate_benchmarks.py --task all --baseline request:DDPG="output/Kuairand_Pure/agents/DDPG_*/model_test.report" --baseline request:MERA="output/Kuairand_Pure/agents/MERA_*/model_test.report" --baseline request:MERAComplete="output/Kuairand_Pure/agents/MERAComplete_*/model_test.report" --baseline whole:DDPG="output/Kuairand_Pure/agents/DDPG_*/model.report" --baseline whole:MERA="output/Kuairand_Pure/agents/MERA_*/model.report" --baseline whole:MERAComplete="output/Kuairand_Pure/agents/MERAComplete_*/model.report" --baseline cross:TD3="output/Kuairand_Pure/agents/TD3_*/model.report" --select auto --save_csv output/Kuairand_Pure/eval/all_tasks_metrics.csv
+```
+
+Single-task example (whole-session only):
+
+```bash
+python evaluate_benchmarks.py --task whole --baseline DDPG="output/Kuairand_Pure/agents/DDPG_*/model.report" --baseline MERA="output/Kuairand_Pure/agents/MERA_*/model.report" --baseline MERAComplete="output/Kuairand_Pure/agents/MERAComplete_*/model.report" --select auto
+```
+
+Fairness-constrained aggregation example (mismatch triggers error):
+
+```bash
+python evaluate_benchmarks.py --task whole --baseline DDPG="output/Kuairand_Pure/agents/DDPG_*/model.report" --baseline MERA="output/Kuairand_Pure/agents/MERA_*/model.report" --baseline MERAComplete="output/Kuairand_Pure/agents/MERAComplete_*/model.report" --select auto --expect_N 10 --expect_arg single_response=False --expect_arg reward_func='get_immediate_reward' --expect_arg item_correlation=0.2 --expect_arg episode_batch_size=32
+```
+
+### 2.4.2 Checkpoint validation entry (no-explore rollout)
+
+Use this to validate trained checkpoints directly in simulator rollout mode.
+
+```bash
+python validate_benchmarks.py --task whole --baseline MERAComplete="output/Kuairand_Pure/agents/MERAComplete_*" --baseline MERA="output/Kuairand_Pure/agents/MERA_*" --baseline DDPG="output/Kuairand_Pure/agents/DDPG_*" --eval_steps 1000 --device cpu
+```
+
+Fairness-constrained validation example (mismatch triggers error):
+
+```bash
+python validate_benchmarks.py --task whole --baseline MERAComplete="output/Kuairand_Pure/agents/MERAComplete_*" --baseline MERA="output/Kuairand_Pure/agents/MERA_*" --baseline DDPG="output/Kuairand_Pure/agents/DDPG_*" --eval_steps 1000 --device cpu --expect_N 10 --expect_arg single_response=False --expect_arg reward_func='get_immediate_reward' --expect_arg item_correlation=0.2 --expect_arg episode_batch_size=32
+```
+
+Notes:
+- `--eval_steps` means validation interaction steps in simulator rollout, not session count.
+- `Runs` in output means how many directories/reports were matched by each baseline glob.
+- `--expect_N` checks `slate_size`.
+- Any `--expect_*` mismatch will raise error and stop evaluation.
+
+### 2.4.3 Whole-session quick extractor (legacy report parser)
+
+```bash
+python extract_wholesession_metrics.py --report_glob "output/Kuairand_Pure/agents/*/model.report" --select best_total_reward
+```
+
+You can also parse one report only:
+
+```bash
+python extract_wholesession_metrics.py --report_path "output/Kuairand_Pure/agents/<run_dir>/model.report" --select last
+```
+
 
 
 # 3. Result Observation

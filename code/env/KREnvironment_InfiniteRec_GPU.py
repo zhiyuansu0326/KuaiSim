@@ -31,6 +31,7 @@ class KREnvironment_InfiniteRec_GPU():
         - max_step_per_episode
         - episode_batch_size
         - item_correlation
+        - intra_slate_metric
         - env_val_holdout
         - env_test_holdout
         '''
@@ -44,6 +45,9 @@ class KREnvironment_InfiniteRec_GPU():
                             help='episode sample batch size')
         parser.add_argument('--item_correlation', type=float, default=0.2, 
                             help='magnitude of item correlation')
+        parser.add_argument('--intra_slate_metric', type=str, default='ILD',
+                            choices=['ILD', 'EILD', 'ild', 'eild'],
+                            help='intra-slate diversity metric used for correlation penalty')
         parser.add_argument('--env_val_holdout', type=int, default=0, 
                             help='val holdout')
         parser.add_argument('--env_test_holdout', type=int, default=0, 
@@ -84,6 +88,7 @@ class KREnvironment_InfiniteRec_GPU():
         self.max_step_per_episode = args.max_step_per_episode
         self.episode_batch_size = args.episode_batch_size
         self.rho = args.item_correlation
+        self.intra_slate_metric = args.intra_slate_metric.upper()
         
         print("Load immediate user response model")
         uirm_stats, uirm_model, uirm_args = self.get_user_model(args.uirm_log_path, args.device)
@@ -233,7 +238,8 @@ class KREnvironment_InfiniteRec_GPU():
         - user_feedback: {'immediate_response': (B, slate_size, n_feedback), 
                           'done': (B,),
                           'coverage': scalar,
-                          'ILD': scalar}
+                          'ILD': scalar,
+                          'EILD': scalar}
         - updated_observation (next observation of the same user)
         '''
         
@@ -281,7 +287,8 @@ class KREnvironment_InfiniteRec_GPU():
         user_feedback = {'immediate_response': response, 
                          'done': done_mask, 
                          'coverage': response_out['coverage'], 
-                         'ILD': response_out['ILD']}
+                         'ILD': response_out['ILD'],
+                         'EILD': response_out.get('EILD', response_out['ILD'])}
         return deepcopy(self.current_observation), user_feedback, update_info['updated_observation']
     
     def get_response(self, step_dict):
@@ -325,10 +332,12 @@ class KREnvironment_InfiniteRec_GPU():
         # user response sampling
         # (B, slate_size, n_feedback)
         response = torch.bernoulli(point_scores)
-        
+
+        diversity_score = 1 - torch.mean(corr_factor).item()
         return {'immediate_response': response, 
                 'coverage': coverage,
-                'ILD': 1 - torch.mean(corr_factor).item()}
+                'ILD': diversity_score,
+                'EILD': diversity_score}
 
     def get_ground_truth_user_state(self, profile, history):
         batch_data = {}
@@ -348,8 +357,19 @@ class KREnvironment_InfiniteRec_GPU():
         B, L, d = action_item_encoding.shape
         # pairwise similarity in a slate (B, L, L)
         pair_similarity = torch.mean(action_item_encoding.view(B,L,1,d) * action_item_encoding.view(B,1,L,d), dim = -1)
-        # similarity to slate average, (B, L)
-        point_similarity = torch.mean(pair_similarity, dim = -1)
+        if self.intra_slate_metric == 'EILD':
+            # position-aware pair discount: farther positions contribute less
+            position_idx = torch.arange(L, device = action_item_encoding.device, dtype = pair_similarity.dtype)
+            pair_distance = torch.abs(position_idx.view(L,1) - position_idx.view(1,L))
+            pair_discount = torch.where(pair_distance > 0,
+                                        1.0 / torch.log2(pair_distance + 1.0),
+                                        torch.zeros_like(pair_distance))
+            pair_discount = pair_discount.view(1, L, L)
+            normalizer = pair_discount.sum(dim = -1).clamp_min(1e-12)
+            point_similarity = torch.sum(pair_similarity * pair_discount, dim = -1) / normalizer
+        else:
+            # ILD baseline: similarity to slate average, (B, L)
+            point_similarity = torch.mean(pair_similarity, dim = -1)
         return point_similarity
         
 

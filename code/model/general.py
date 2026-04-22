@@ -114,8 +114,11 @@ class BaseModel(nn.Module):
                 batch[k] = torch.tensor(val)
             else:
                 continue
-            if batch[k].type() == "torch.DoubleTensor":
+            if batch[k].dtype == torch.float64:
                 batch[k] = batch[k].float()
+            elif batch[k].dtype in (torch.int8, torch.int16, torch.int32):
+                # Align with modules that expect index tensors as int64.
+                batch[k] = batch[k].long()
             batch[k] = batch[k].to(self.device)
         return batch
     

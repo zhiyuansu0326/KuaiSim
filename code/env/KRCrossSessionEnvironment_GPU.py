@@ -7,6 +7,7 @@ from copy import deepcopy
 from argparse import Namespace
 from torch.utils.data import DataLoader
 from torch.distributions import Categorical
+import torch.nn.functional as F
 
 from reader import *
 from model.simulator import *
@@ -103,7 +104,10 @@ class KRCrossSessionEnvironment_GPU(KREnvironment_WholeSession_GPU):
         self.user_return_history = []
         self.user_total_return_gap = []
         self.env_history = {'return_day': [], 
-                            'total_return_gap': []}
+                            'total_return_gap': [],
+                            'coverage': [],
+                            'ILD': [],
+                            'EILD': []}
 
         self.session_count = 0
         return deepcopy(self.current_observation)
@@ -143,7 +147,15 @@ class KRCrossSessionEnvironment_GPU(KREnvironment_WholeSession_GPU):
             # sample immediate responses
             # (B, slate_size, n_feedback)
             score_indices = torch.tile(indices[:,:,None], (1,1,point_scores.shape[-1]))
-            selected_scores = torch.gather(point_scores, 1, score_indices) 
+            selected_scores = torch.gather(point_scores, 1, score_indices)
+            # (B, slate_size, item_dim)
+            selected_item_enc = self.candidate_item_encoding[indices].view(self.episode_batch_size, self.slate_size, -1)
+            item_enc_norm = F.normalize(selected_item_enc, p = 2.0, dim = -1)
+            # (B, slate_size)
+            corr_factor = self.get_intra_slate_similarity(item_enc_norm)
+            # (B, slate_size, n_feedback)
+            selected_scores = selected_scores - corr_factor.view(self.episode_batch_size, self.slate_size, 1) * self.rho
+            selected_scores[selected_scores < 0] = 0
             # (B, slate_size, n_feedback)
             response = torch.bernoulli(selected_scores)
 
@@ -188,10 +200,17 @@ class KRCrossSessionEnvironment_GPU(KREnvironment_WholeSession_GPU):
                 raise NotImplemented
             else:
                 return_day = torch.zeros(self.episode_batch_size).to(self.device)
+        diversity_score = 1 - torch.mean(corr_factor).item()
         user_feedback = {'immediate_response': response, 
-                         'user_state': user_state,
-                         'done': done_mask, 
-                         'retention': return_day.to(torch.float)}
+                          'user_state': user_state,
+                          'done': done_mask, 
+                          'retention': return_day.to(torch.float),
+                          'coverage': len(torch.unique(indices)),
+                          'ILD': diversity_score,
+                          'EILD': diversity_score}
+        self.env_history['coverage'].append(user_feedback['coverage'])
+        self.env_history['ILD'].append(user_feedback['ILD'])
+        self.env_history['EILD'].append(user_feedback['EILD'])
         return deepcopy(self.current_observation), user_feedback, update_info
 
 

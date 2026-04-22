@@ -1,3 +1,7 @@
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+cd "${REPO_ROOT}"
+
 mkdir -p output
 
 # RL4RS environment
@@ -11,9 +15,10 @@ log_name="user_KRMBUserResponse_lr0.0001_reg0.01_nlayer2"
 # environment args
 ENV_CLASS='KREnvironment_WholeSession_GPU'
 MAX_STEP=20
-SLATE_SIZE=6
+SLATE_SIZE=20
 EP_BS=32
 RHO=0.2
+INTRA_SLATE_METRIC=EILD
 
 # policy args
 POLICY_CLASS='OneStageHyperPolicy_with_DotScore'
@@ -57,7 +62,7 @@ do
                     do
                         mkdir -p ${output_path}agents/ddpg_${ENV_CLASS}_${POLICY_CLASS}_actor${ACTOR_LR}_critic${CRITIC_LR}_niter${N_ITER}_reg${REG}_ep${INITEP}_noise${HA_VAR}_bs${BS}_epbs${EP_BS}_step${MAX_STEP}_seed${SEED}/
 
-                        python train_actor_critic.py\
+                        python "${SCRIPT_DIR}/train_actor_critic.py"\
                             --env_class ${ENV_CLASS}\
                             --policy_class ${POLICY_CLASS}\
                             --critic_class ${CRITIC_CLASS}\
@@ -71,6 +76,7 @@ do
                             --slate_size ${SLATE_SIZE}\
                             --episode_batch_size ${EP_BS}\
                             --item_correlation ${RHO}\
+                            --intra_slate_metric ${INTRA_SLATE_METRIC}\
                             --single_response\
                             --policy_action_hidden 256 64\
                             --policy_noise_var ${HA_VAR}\
