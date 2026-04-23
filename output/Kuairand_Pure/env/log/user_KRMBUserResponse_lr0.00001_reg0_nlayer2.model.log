@@ -1,0 +1,5 @@
+Namespace(model='KRMBUserResponse', reader='KRMBSeqReader')
+Namespace(attn_n_head=4, batch_size=128, cuda=0, data_separator=',', dropout_rate=0.1, enc_dim=64, epoch=10, item_latent_dim=32, item_meta_file='../dataset/Kuairand_Pure/video_features_basic_Pure_fillna.csv', l2_coef=0.0, loss='bce', lr=1e-05, max_hist_seq_len=100, meta_file_sep=',', model_path='output/Kuairand_Pure/env/user_KRMBUserResponse_lr0.00001_reg0_nlayer2.model', n_worker=4, save_with_val=False, scorer_hidden_dims=[128, 32], seed=619607, state_hidden_dims=[128], test_batch_size=128, test_file='', test_holdout_per_user=5, train_file='../dataset/Kuairand_Pure/log_session_4_08_to_5_08_Pure.csv', transformer_d_forward=64, transformer_n_layer=2, user_latent_dim=32, user_meta_file='../dataset/Kuairand_Pure/user_features_Pure_fillna.csv', val_batch_size=128, val_file='', val_holdout_per_user=5)
+initiate KuaiRandMultiBehaior sequence reader
+Loading data files
+Load item meta data

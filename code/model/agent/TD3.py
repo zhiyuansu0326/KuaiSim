@@ -119,8 +119,7 @@ class TD3(BaseRLAgent):
         super().action_before_train()
         
         # training records
-        self.training_history = {'actor_loss': [], 'critic1_loss': [], 'critic2_loss': [],
-                                 'Q': [], 'next_Q': []}
+        self.training_history = {'actor_loss': [], 'critic1_loss': [], 'critic2_loss': []}
         # print(f"Total {prepare_step} prepare steps")
         
     # def run_episode_step(self, *episode_args):

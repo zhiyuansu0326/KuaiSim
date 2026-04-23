@@ -3,16 +3,27 @@ import ast
 import csv
 import glob
 import math
+import re
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from statistics import mean, stdev
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
-
 TASK_REQUEST = "request"
 TASK_WHOLE = "whole"
 TASK_CROSS = "cross"
 ALL_TASKS = [TASK_REQUEST, TASK_WHOLE, TASK_CROSS]
+
+_NUMERIC_RE = r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?"
+_SPECIAL_FLOAT_RE = r"[+-]?(?:nan|inf|NaN|Inf|NAN|INF)"
+_SCALAR_RE = rf"(?:{_NUMERIC_RE}|{_SPECIAL_FLOAT_RE})"
+_NUMPY_SCALAR_RE = re.compile(
+    r"\b(?:np\.)?"
+    r"(?:float16|float32|float64|float_|int8|int16|int32|int64|int_|"
+    r"uint8|uint16|uint32|uint64|uint_|bool_)\(([^()]+)\)"
+)
+_TENSOR_SCALAR_RE = re.compile(rf"\btensor\(\s*({_SCALAR_RE})(?:\s*,[^)]*)?\)")
 
 
 @dataclass
@@ -46,8 +57,29 @@ def parse_report_line(line: str) -> ParsedRow:
     if ":" not in online_raw or ":" not in train_raw:
         raise ValueError(f"Malformed online/training blocks: {line}")
 
-    online = ast.literal_eval(online_raw.split(":", 1)[1].strip())
-    train = ast.literal_eval(train_raw.split(":", 1)[1].strip())
+    def literal_eval_metric_block(text: str) -> Dict[str, Any]:
+        while True:
+            normalized = _NUMPY_SCALAR_RE.sub(lambda m: m.group(1), text)
+            if normalized == text:
+                break
+            text = normalized
+        text = _TENSOR_SCALAR_RE.sub(lambda m: m.group(1), text)
+        text = re.sub(
+            r"(?<![\w.])(?:np\.)?[+-]?nan(?![\w.])",
+            "None",
+            text,
+            flags=re.IGNORECASE,
+        )
+        text = re.sub(
+            r"(?<![\w.])(?:np\.)?[+-]?inf(?![\w.])",
+            "None",
+            text,
+            flags=re.IGNORECASE,
+        )
+        return ast.literal_eval(text)
+
+    online = literal_eval_metric_block(online_raw.split(":", 1)[1].strip())
+    train = literal_eval_metric_block(train_raw.split(":", 1)[1].strip())
 
     if not isinstance(online, dict) or not isinstance(train, dict):
         raise ValueError(f"Online/training is not dict: {line}")
@@ -57,17 +89,26 @@ def parse_report_line(line: str) -> ParsedRow:
 
 def load_rows(report_path: Path) -> List[ParsedRow]:
     rows: List[ParsedRow] = []
+    step_lines = 0
+    first_error: Optional[Exception] = None
     with report_path.open("r", encoding="utf-8", errors="replace") as f:
         for raw in f:
             line = raw.strip()
             if not line.startswith("step:"):
                 continue
+            step_lines += 1
             try:
                 rows.append(parse_report_line(line))
-            except Exception:
+            except Exception as exc:
+                if first_error is None:
+                    first_error = exc
                 continue
     if not rows:
-        raise ValueError(f"No valid metric rows found in report: {report_path}")
+        if step_lines == 0:
+            detail = "no step lines"
+        else:
+            detail = f"{step_lines} step line(s) failed to parse; first error: {first_error}"
+        raise ValueError(f"No valid metric rows found in report: {report_path} ({detail})")
     return rows
 
 
@@ -94,8 +135,12 @@ def extract_rates(row: ParsedRow) -> Dict[str, float]:
 def extract_task_metrics(task: str, row: ParsedRow) -> Dict[str, float]:
     metrics: Dict[str, float] = {}
     if task == TASK_REQUEST:
-        metrics["Average L-reward"] = read_metric(row, ["online.avg_reward", "train.avg_reward"])
-        metrics["Max L-reward"] = read_metric(row, ["online.max_reward", "train.max_reward"])
+        metrics["Average L-reward"] = read_metric(
+            row, ["online.avg_reward", "train.avg_reward"]
+        )
+        metrics["Max L-reward"] = read_metric(
+            row, ["online.max_reward", "train.max_reward"]
+        )
         metrics["Coverage"] = read_metric(row, ["online.coverage", "train.coverage"])
         metrics["ILD"] = read_metric(
             row,
@@ -110,12 +155,16 @@ def extract_task_metrics(task: str, row: ParsedRow) -> Dict[str, float]:
         )
     elif task == TASK_WHOLE:
         metrics["Depth"] = read_metric(row, ["online.step", "train.step"])
-        metrics["Average reward"] = read_metric(row, ["train.avg_reward", "online.avg_reward"])
+        metrics["Average reward"] = read_metric(
+            row, ["train.avg_reward", "online.avg_reward"]
+        )
         metrics["Total reward"] = read_metric(
             row, ["train.avg_total_reward", "online.avg_total_reward"]
         )
         metrics["Coverage"] = read_metric(row, ["online.coverage", "train.coverage"])
-        metrics["ILD"] = read_metric(row, ["online.EILD", "online.ILD", "train.EILD", "train.ILD"])
+        metrics["ILD"] = read_metric(
+            row, ["online.EILD", "online.ILD", "train.EILD", "train.ILD"]
+        )
     elif task == TASK_CROSS:
         metrics["Return day"] = read_metric(
             row, ["train.avg_retention", "online.return_day", "train.return_day"]
@@ -183,7 +232,9 @@ def parse_namespace_line(line: str) -> Optional[Dict[str, Any]]:
     if not text.startswith("Namespace(") or not text.endswith(")"):
         return None
     try:
-        parsed = eval(text, {"__builtins__": {}}, {"Namespace": lambda **kwargs: kwargs})
+        parsed = eval(
+            text, {"__builtins__": {}}, {"Namespace": lambda **kwargs: kwargs}
+        )
         if isinstance(parsed, dict):
             return parsed
     except Exception:
@@ -216,7 +267,9 @@ def load_run_config(run_dir: Path) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     if init_cfg is None:
         raise ValueError(f"Cannot find class namespace in log: {log_path}")
     if full_cfg is None:
-        raise ValueError(f"Cannot find args namespace(save_path=...) in log: {log_path}")
+        raise ValueError(
+            f"Cannot find args namespace(save_path=...) in log: {log_path}"
+        )
     return init_cfg, full_cfg
 
 
@@ -281,6 +334,7 @@ def enforce_run_expectations(
                 f"expected={expected}, actual={actual}."
             )
 
+
 def parse_baseline_specs(task: str, specs: List[str]) -> Dict[str, Dict[str, str]]:
     """
     Returns:
@@ -292,7 +346,9 @@ def parse_baseline_specs(task: str, specs: List[str]) -> Dict[str, Dict[str, str
 
     for spec in specs:
         if "=" not in spec:
-            raise ValueError(f"Invalid --baseline spec: {spec}. Use NAME=GLOB or TASK:NAME=GLOB.")
+            raise ValueError(
+                f"Invalid --baseline spec: {spec}. Use NAME=GLOB or TASK:NAME=GLOB."
+            )
         left, pattern = spec.split("=", 1)
         if task == "all":
             if ":" not in left:
@@ -363,6 +419,11 @@ def evaluate_task(
 
         selected_metrics: List[Dict[str, float]] = []
         for rp in report_files:
+            try:
+                rows = load_rows(rp)
+            except ValueError as exc:
+                print(f"[WARN] Skipping report: {exc}", file=sys.stderr)
+                continue
             if need_expect_check:
                 run_dir = rp.parent
                 _, full_cfg = load_run_config(run_dir)
@@ -372,7 +433,6 @@ def evaluate_task(
                     expected_cfg=expected_cfg,
                     expect_n=expect_n,
                 )
-            rows = load_rows(rp)
             selected = select_row(task, rows, select_mode)
             selected_metrics.append(extract_task_metrics(task, selected))
 
@@ -389,7 +449,9 @@ def evaluate_task(
 
         agg: Dict[str, Tuple[float, float]] = {}
         for c in cols:
-            mu, sd = aggregate_metric([m.get(c, float("nan")) for m in selected_metrics])
+            mu, sd = aggregate_metric(
+                [m.get(c, float("nan")) for m in selected_metrics]
+            )
             agg[c] = (mu, sd)
 
         task_rows.append(
@@ -411,12 +473,7 @@ def print_task_table(task: str, rows: List[Dict[str, Any]]) -> None:
 
     cols = required_cols_for_task(task)
     extra = sorted(
-        {
-            k
-            for r in rows
-            for k in r.get("metrics", {}).keys()
-            if k.endswith("_rate")
-        }
+        {k for r in rows for k in r.get("metrics", {}).keys() if k.endswith("_rate")}
     )
     cols.extend(extra)
 
@@ -439,11 +496,7 @@ def save_csv(path: Path, all_rows: List[Dict[str, Any]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
 
     all_metric_names = sorted(
-        {
-            c
-            for r in all_rows
-            for c in r.get("metrics", {}).keys()
-        }
+        {c for r in all_rows for c in r.get("metrics", {}).keys()}
     )
 
     fields = ["task", "baseline", "n_runs"]
@@ -498,7 +551,13 @@ def main() -> None:
         "--select",
         type=str,
         default="auto",
-        choices=["auto", "last", "best_total_reward", "best_avg_reward", "best_return_day"],
+        choices=[
+            "auto",
+            "last",
+            "best_total_reward",
+            "best_avg_reward",
+            "best_return_day",
+        ],
         help="Row selection mode per report.",
     )
     parser.add_argument(

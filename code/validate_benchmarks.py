@@ -12,11 +12,20 @@ import torch
 
 import utils
 
-
 TASK_REQUEST = "request"
 TASK_WHOLE = "whole"
 TASK_CROSS = "cross"
 ALL_TASKS = [TASK_REQUEST, TASK_WHOLE, TASK_CROSS]
+
+LEGACY_ARG_DEFAULTS: Dict[str, Any] = {
+    "intra_slate_metric": "ILD",
+}
+
+
+def apply_legacy_config_defaults(cfg: Dict[str, Any]) -> Dict[str, Any]:
+    for key, value in LEGACY_ARG_DEFAULTS.items():
+        cfg.setdefault(key, value)
+    return cfg
 
 
 @dataclass
@@ -115,7 +124,9 @@ def select_row(task: str, rows: List[ParsedRow], mode: str) -> ParsedRow:
         elif mode == "best_total_reward":
             key = read_metric(r, ["train.avg_total_reward", "online.avg_total_reward"])
         elif mode == "best_return_day":
-            rd = read_metric(r, ["train.avg_retention", "online.return_day", "train.return_day"])
+            rd = read_metric(
+                r, ["train.avg_retention", "online.return_day", "train.return_day"]
+            )
             key = -rd if is_finite(rd) else float("nan")
         else:
             raise ValueError(f"Unknown select mode: {mode}")
@@ -132,7 +143,9 @@ def parse_namespace_line(line: str) -> Optional[Dict[str, Any]]:
     if not text.startswith("Namespace(") or not text.endswith(")"):
         return None
     try:
-        parsed = eval(text, {"__builtins__": {}}, {"Namespace": lambda **kwargs: kwargs})
+        parsed = eval(
+            text, {"__builtins__": {}}, {"Namespace": lambda **kwargs: kwargs}
+        )
         if isinstance(parsed, dict):
             return parsed
     except Exception:
@@ -166,7 +179,10 @@ def load_run_config(run_dir: Path) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     if init_cfg is None:
         raise ValueError(f"Cannot find initial class Namespace in log: {log_path}")
     if full_cfg is None:
-        raise ValueError(f"Cannot find final args Namespace(save_path=...) in log: {log_path}")
+        raise ValueError(
+            f"Cannot find final args Namespace(save_path=...) in log: {log_path}"
+        )
+    apply_legacy_config_defaults(full_cfg)
     return init_cfg, full_cfg
 
 
@@ -209,6 +225,10 @@ def values_match(actual: Any, expected: Any, tol: float = 1e-8) -> bool:
     return str(actual) == str(expected)
 
 
+def apply_legacy_arg_defaults(args: argparse.Namespace) -> None:
+    apply_legacy_config_defaults(vars(args))
+
+
 def enforce_run_expectations(
     run_dir: Path,
     full_cfg: Dict[str, Any],
@@ -230,6 +250,7 @@ def enforce_run_expectations(
                 f"[{run_dir}] fairness check failed: '{key}' mismatch, "
                 f"expected={expected}, actual={actual}."
             )
+
 
 def mean_of(values: Iterable[float], drop_zero_head: bool = False) -> float:
     vals = list(values)
@@ -256,10 +277,13 @@ def build_agent_from_run(
     agent_class = load_class("model.agent", init_cfg["agent_class"])
     buffer_class = load_class("model.buffer", init_cfg["buffer_class"])
     critic_class = (
-        load_class("model.critic", init_cfg["critic_class"]) if "critic_class" in init_cfg else None
+        load_class("model.critic", init_cfg["critic_class"])
+        if "critic_class" in init_cfg
+        else None
     )
 
     args = argparse.Namespace(**full_cfg)
+    apply_legacy_arg_defaults(args)
     args.device = device
     if device.startswith("cuda:"):
         args.cuda = int(device.split(":")[1])
@@ -271,7 +295,9 @@ def build_agent_from_run(
     policy = policy_class(args, env).to(device)
 
     if critic_class is None:
-        raise ValueError("Validation runner currently supports actor-critic checkpoints only.")
+        raise ValueError(
+            "Validation runner currently supports actor-critic checkpoints only."
+        )
 
     td3_like_agents = {"TD3", "CrossSessionTD3"}
     if init_cfg["agent_class"] in td3_like_agents:
@@ -320,7 +346,9 @@ def run_validation_episode_rollout(agent: Any, eval_steps: int) -> Dict[str, flo
     if "coverage" in env_report and "ILD" in env_report and "step" in env_report:
         out["Depth"] = to_float(env_report["step"])
         out["Average reward"] = mean_of(eval_hist.get("avg_reward", []))
-        out["Total reward"] = mean_of(eval_hist.get("avg_total_reward", []), drop_zero_head=True)
+        out["Total reward"] = mean_of(
+            eval_hist.get("avg_total_reward", []), drop_zero_head=True
+        )
         out["Coverage"] = to_float(env_report["coverage"])
         out["ILD"] = to_float(env_report["ILD"])
 
@@ -346,7 +374,9 @@ def run_validation_episode_rollout(agent: Any, eval_steps: int) -> Dict[str, flo
     return out
 
 
-def evaluate_request_from_test_report(run_dir: Path, select_mode: str) -> Dict[str, float]:
+def evaluate_request_from_test_report(
+    run_dir: Path, select_mode: str
+) -> Dict[str, float]:
     report_path = run_dir / "model_test.report"
     if not report_path.exists():
         raise FileNotFoundError(f"Missing request test report: {report_path}")
@@ -433,7 +463,9 @@ def evaluate_task(
     for baseline, run_glob in baseline_globs.items():
         run_dirs = sorted({Path(p) for p in glob.glob(run_glob) if Path(p).is_dir()})
         if not run_dirs:
-            rows.append({"task": task, "baseline": baseline, "n_runs": 0, "metrics": {}})
+            rows.append(
+                {"task": task, "baseline": baseline, "n_runs": 0, "metrics": {}}
+            )
             continue
 
         run_metrics: List[Dict[str, float]] = []
@@ -463,7 +495,9 @@ def evaluate_task(
             run_metrics.append(m)
 
         cols = required_cols(task)
-        extra = sorted({k for m in run_metrics for k in m.keys() if k.endswith("_rate")})
+        extra = sorted(
+            {k for m in run_metrics for k in m.keys() if k.endswith("_rate")}
+        )
         cols.extend(extra)
 
         agg: Dict[str, Tuple[float, float]] = {}
@@ -471,7 +505,14 @@ def evaluate_task(
             mu, sd = aggregate_metric([m.get(c, float("nan")) for m in run_metrics])
             agg[c] = (mu, sd)
 
-        rows.append({"task": task, "baseline": baseline, "n_runs": len(run_metrics), "metrics": agg})
+        rows.append(
+            {
+                "task": task,
+                "baseline": baseline,
+                "n_runs": len(run_metrics),
+                "metrics": agg,
+            }
+        )
     return rows
 
 
@@ -481,7 +522,9 @@ def print_table(task: str, rows: List[Dict[str, Any]]) -> None:
         print("No baseline mapping.")
         return
     cols = required_cols(task)
-    extra = sorted({k for r in rows for k in r.get("metrics", {}) if k.endswith("_rate")})
+    extra = sorted(
+        {k for r in rows for k in r.get("metrics", {}) if k.endswith("_rate")}
+    )
     cols.extend(extra)
     head = ["Baseline", "Runs"] + cols
     print(" | ".join(head))
@@ -520,7 +563,13 @@ def main() -> None:
         "--select",
         type=str,
         default="auto",
-        choices=["auto", "last", "best_avg_reward", "best_total_reward", "best_return_day"],
+        choices=[
+            "auto",
+            "last",
+            "best_avg_reward",
+            "best_total_reward",
+            "best_return_day",
+        ],
         help="Selection mode for request test report rows.",
     )
     parser.add_argument(
