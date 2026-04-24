@@ -6,7 +6,7 @@ mkdir -p output/Kuairand_Pure/
 mkdir -p output/Kuairand_Pure/agents/
 
 output_path="output/Kuairand_Pure/"
-log_name="user_KRMBUserResponse_lr0.0001_reg0_nlayer2"
+log_name="user_KRMBUserResponse_lr0.0001_reg0.01_nlayer2"
 
 # environment args
 ENV_CLASS='KREnvironment_WholeSession_GPU'
@@ -79,7 +79,6 @@ do
                             --item_correlation ${RHO}\
                             --intra_slate_metric ${INTRA_SLATE_METRIC}\
                             --temper_discount ${TEMPER_DISCOUNT}\
-                            --single_response\
                             --policy_action_hidden 256 64\
                             --policy_noise_var ${HA_VAR}\
                             --policy_noise_clip ${HA_CLIP}\

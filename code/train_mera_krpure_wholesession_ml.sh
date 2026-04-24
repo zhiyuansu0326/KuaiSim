@@ -74,7 +74,6 @@ do
                         --item_correlation ${RHO}\
                         --intra_slate_metric ${INTRA_SLATE_METRIC}\
                         --temper_discount ${TEMPER_DISCOUNT}\
-                        --single_response\
                         --mera_shortlist_size ${MERA_K}\
                         --mera_policy_hidden 256 64\
                         --mera_sinkhorn_tau ${MERA_TAU}\

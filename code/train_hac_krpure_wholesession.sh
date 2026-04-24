@@ -72,7 +72,6 @@ do
                             --slate_size ${SLATE_SIZE}\
                             --episode_batch_size ${EP_BS}\
                             --item_correlation ${RHO}\
-                            --single_response\
                             --policy_action_hidden 256 64\
                             --policy_noise_var ${HA_VAR}\
                             --policy_noise_clip ${HA_CLIP}\
