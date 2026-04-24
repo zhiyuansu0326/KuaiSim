@@ -69,7 +69,6 @@ class HAC(DDPG):
                 - registered_models
         '''
         args, env, actor, critic, buffer = input_args
-        assert env.single_response
         super().__init__(*input_args)
         self.behavior_lr = args.behavior_lr
         self.behavior_decay = args.behavior_decay
@@ -95,9 +94,23 @@ class HAC(DDPG):
         - training_history: hyper_actor_loss, behavior_loss
         '''
         super().setup_monitors()
-        self.training_history.update({"hyper_actor_loss": [], 
+        self.training_history.update({"hyper_actor_loss": [],
                                       "behavior_loss": []})
-                                    
+
+    def get_behavior_label(self, user_feedback):
+        response = user_feedback['immediate_response'].view(
+            self.batch_size, self.env.slate_size, self.env.response_dim
+        )
+        if self.env.single_response:
+            return response[:, :, 0]
+
+        weights = self.env.response_weights.to(response.device).to(response.dtype)
+        point_reward = torch.sum(response * weights.view(1, 1, -1), dim=2)
+        min_reward = torch.clamp(weights, max=0.0).sum()
+        max_reward = torch.clamp(weights, min=0.0).sum()
+        denom = (max_reward - min_reward).clamp_min(1e-8)
+        return ((point_reward - min_reward) / denom).clamp(0.0, 1.0)
+
 
     def step_train(self):
         '''
@@ -189,15 +202,18 @@ class HAC(DDPG):
             # (B, K)
             A = policy_output['effect_action']
             # (B, K)
-            point_label = user_feedback['immediate_response'].view(self.batch_size, self.env.slate_size, self.env.response_dim)[:,:,0]
-            
+            point_label = self.get_behavior_label(user_feedback)
+
             self.actor_behavior_optimizer.zero_grad()
-            temp_policy_output = self.apply_policy(observation, self.actor, 
+            temp_policy_output = self.apply_policy(observation, self.actor,
                                                    epsilon, False, is_train)
             candidate_scores = torch.gather(temp_policy_output['all_preds'], 1, A-1)
-            action_prob = torch.sigmoid(candidate_scores)
-            behavior_loss = F.binary_cross_entropy(action_prob, point_label).mean()
-        
+            if self.env.single_response:
+                action_prob = torch.sigmoid(candidate_scores)
+                behavior_loss = F.binary_cross_entropy(action_prob, point_label).mean()
+            else:
+                behavior_loss = F.binary_cross_entropy_with_logits(candidate_scores, point_label).mean()
+
             behavior_loss.backward()
             self.actor_behavior_optimizer.step()
             
@@ -242,4 +258,3 @@ class HAC(DDPG):
 
     def load(self):
         super().load()
- 
