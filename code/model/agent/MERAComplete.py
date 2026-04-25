@@ -118,7 +118,7 @@ class MERAComplete(BaseRLAgent):
             retain_graph=True,
             create_graph=False,
         )[0]
-        g_theta = (-grad_action).detach()
+        g_theta = grad_action.detach()
 
         residual = self._project_matrix_shift_invariant(
             policy_output["logits"] + policy_output["gumbel_noise"] - g_theta

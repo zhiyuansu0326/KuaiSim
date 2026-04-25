@@ -88,6 +88,7 @@ do
                         --merac_tau ${MERAC_TAU}\
                         --merac_sinkhorn_iter ${MERAC_SINKHORN_ITER}\
                         --merac_gumbel_noise ${MERAC_GUMBEL}\
+                        --merac_eval_gumbel\
                         --state_user_latent_dim 16\
                         --state_item_latent_dim 16\
                         --state_transformer_enc_dim 32\

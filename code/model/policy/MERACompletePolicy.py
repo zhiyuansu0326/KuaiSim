@@ -47,6 +47,11 @@ class MERACompletePolicy(OneStagePolicy):
             help="Gumbel perturbation scale",
         )
         parser.add_argument(
+            "--merac_eval_gumbel",
+            action="store_true",
+            help="apply Gumbel perturbation during evaluation rollouts",
+        )
+        parser.add_argument(
             "--merac_dump_bias",
             type=float,
             default=0.0,
@@ -62,6 +67,7 @@ class MERACompletePolicy(OneStagePolicy):
         self.sinkhorn_tau = args.merac_tau
         self.sinkhorn_iter = args.merac_sinkhorn_iter
         self.gumbel_noise = args.merac_gumbel_noise
+        self.eval_gumbel = getattr(args, "merac_eval_gumbel", False)
         self.shortlist_size = min(args.merac_shortlist_size, env.n_candidate)
         if self.shortlist_size < env.slate_size:
             raise ValueError(
@@ -255,7 +261,7 @@ class MERACompletePolicy(OneStagePolicy):
         dump_logits = torch.sum(shortlist_item_enc * dump_query, dim=-1, keepdim=True) + self.dump_bias
         logits = torch.cat([slot_logits, dump_logits], dim=2)
 
-        if self.gumbel_noise > 0 and (is_train or do_explore):
+        if self.gumbel_noise > 0 and (is_train or do_explore or self.eval_gumbel):
             uniform_noise = torch.rand_like(logits).clamp(1e-8, 1.0 - 1e-8)
             sampled_gumbel = -torch.log(-torch.log(uniform_noise))
             gumbel_noise = sampled_gumbel * self.gumbel_noise

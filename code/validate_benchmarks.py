@@ -266,11 +266,16 @@ def build_agent_from_run(
     run_dir: Path,
     device: str,
     run_cfg: Optional[Tuple[Dict[str, Any], Dict[str, Any]]] = None,
+    merac_eval_gumbel: bool = False,
 ) -> Tuple[Any, Dict[str, Any], Dict[str, Any]]:
     if run_cfg is None:
         init_cfg, full_cfg = load_run_config(run_dir)
     else:
         init_cfg, full_cfg = run_cfg
+
+    if merac_eval_gumbel and init_cfg.get("policy_class") == "MERACompletePolicy":
+        full_cfg = dict(full_cfg)
+        full_cfg["merac_eval_gumbel"] = True
 
     env_class = load_class("env", init_cfg["env_class"])
     policy_class = load_class("model.policy", init_cfg["policy_class"])
@@ -457,6 +462,7 @@ def evaluate_task(
     device: str,
     expected_cfg: Dict[str, Any],
     expect_n: int,
+    merac_eval_gumbel: bool,
 ) -> List[Dict[str, Any]]:
     rows: List[Dict[str, Any]] = []
     need_expect_check = bool(expected_cfg) or expect_n >= 0
@@ -490,6 +496,7 @@ def evaluate_task(
                     run_dir,
                     device=device,
                     run_cfg=run_cfg,
+                    merac_eval_gumbel=merac_eval_gumbel,
                 )
                 m = run_validation_episode_rollout(agent, eval_steps=eval_steps)
             run_metrics.append(m)
@@ -599,6 +606,11 @@ def main() -> None:
             "Example: --expect_arg single_response=False --expect_arg reward_func='get_immediate_reward'."
         ),
     )
+    parser.add_argument(
+        "--merac_eval_gumbel",
+        action="store_true",
+        help="Force MERACompletePolicy to apply Gumbel perturbation during validation rollouts.",
+    )
     args = parser.parse_args()
 
     baseline_map = parse_baseline_specs(args.task, args.baseline)
@@ -614,6 +626,7 @@ def main() -> None:
             device=args.device,
             expected_cfg=expected_cfg,
             expect_n=args.expect_N,
+            merac_eval_gumbel=args.merac_eval_gumbel,
         )
         print_table(task, task_rows)
 
